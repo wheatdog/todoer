@@ -93,7 +93,7 @@ main(int argc, char *argv[])
     //GreetingMessage();
     
     // TODO: Let path become argv[1]
-    char const *path = "/home/wheatdog/.todo";
+    char *path = argv[1];
 
     TODOHeader Header = GetConfig(path);
 
@@ -105,7 +105,7 @@ main(int argc, char *argv[])
     }
     else
     {
-        int Command = GetCommand(argv[1]);
+        int Command = GetCommand(argv[2]);
 
         switch(Command)
         {

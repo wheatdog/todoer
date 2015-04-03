@@ -19,4 +19,4 @@ clean:
 rebuild: clean all
 
 run:
-	$(BUILDDIR)/todoer
+	@$(BUILDDIR)/todoer /home/wheatdog/.todo ${ARGS}

@@ -7,6 +7,8 @@
 enum {_TODO, _WAIT, _DONE};
 enum {_ls, _add, _edit, _rm};
 
+// TODO: Change to use argp API for command line arguments
+
 typedef struct {
     int TotalNum;
     int TodoNum;
@@ -14,11 +16,13 @@ typedef struct {
 } TODOHeader;
 
 typedef struct {
-    char ID[7];
-    char Deadline[20];
-    char Desc[100];
+
+    // TODO: Maybe I need to add an id
+    
+    char Deadline[21];
+    char Desc[101];
     int Stage;
-    char Type[20];
+    char Type[21];
 } Mission;
 
 typedef struct {
@@ -38,6 +42,15 @@ InitHeader(FILE *Config)
 
     fwrite(&Head , sizeof(TODOHeader), 1, Config);
     return;
+}
+
+void
+HeaderUpdate(char const *Path, TODOHeader *Header)
+{
+    // TODO: Header Update
+    FILE *TodoFile = fopen(Path, "rb+");
+    fwrite(Header , sizeof(TODOHeader), 1, TodoFile);
+    fclose(TodoFile);
 }
 
 TODOHeader
@@ -63,7 +76,7 @@ GetConfig(char const *path)
 int
 GetMainCommand(char *arg)
 {
-    char *Command[] = {"ls", "add", "edit", "rm"};
+    char *Command[] = {"ls", "add", "edit", "-r"};
     for (int count = 0; count < (sizeof(Command) / POINTER_SIZE); count++)
     {
         if (strcmp(arg, Command[count]) == 0)
@@ -109,6 +122,7 @@ FreeCommandOption(Command *Input)
     return;
 }
 
+#if 0
 void
 SetID(char *ID)
 {
@@ -135,6 +149,7 @@ SetID(char *ID)
 
     return;
 }
+#endif
 
 void
 DoCommand(char const *Path, Command *Input, TODOHeader *Header)
@@ -149,26 +164,29 @@ DoCommand(char const *Path, Command *Input, TODOHeader *Header)
 
             Mission TodoObj;
 
-            if (!Header->TodoNum)
+            if (!Header->TotalNum)
             {
-                printf("There isn't any thing in TODOer! HURRAY!\n");
+                printf("\nThere isn't any thing in TODOer! HURRAY!\n\n");
             }
             else
             {
-                printf("%-9s%-15s%-30s%-10s%-10s\n", "ID",
-                                                     "Deadline", 
-                                                     "Description",
-                                                     "Stage",
-                                                     "Type");
+                printf("\nTotal: \t%2d\nTodo: \t%2d\nWait: \t%2d\n\n", Header->TotalNum, 
+                                                            Header->TodoNum, 
+                                                            Header->WaitNum);
+                char StageTable[][5] = {"T", "W", "D"};
                 for (int MissionCount = 0;
                      MissionCount < Header->TotalNum;
                      MissionCount++)
                 {
                     fread(&TodoObj, sizeof(TodoObj), 1, TodoFile);
-                    printf("%-9s%-15s%-30s%-10d%-10s\n", TodoObj.ID, TodoObj.Deadline, TodoObj.Desc, TodoObj.Stage, TodoObj.Type);
+                    printf("%2d - [%s] (%s) %s\n", MissionCount + 1,
+                                                   StageTable[TodoObj.Stage],
+                                                   TodoObj.Deadline, 
+                                                   TodoObj.Desc);
                 }
             }
 
+            printf("\n");
             fclose(TodoFile);
 
         } break;
@@ -178,9 +196,8 @@ DoCommand(char const *Path, Command *Input, TODOHeader *Header)
             FILE *TodoFile = fopen(Path, "ab");
             Mission TodoObj;
 
-            // TODO: Generate unique ID
-            SetID(TodoObj.ID);
 
+            printf("\n");
             printf("Description: \t");
             fgets(TodoObj.Desc, 100, stdin);
             TodoObj.Desc[strlen(TodoObj.Desc) - 1] = '\0';
@@ -195,11 +212,15 @@ DoCommand(char const *Path, Command *Input, TODOHeader *Header)
 
             TodoObj.Stage = _TODO;
 
+            printf("\n");
+
             Header->TotalNum++;
             Header->TodoNum++;
 
             fwrite(&TodoObj, sizeof(TodoObj), 1, TodoFile);
             fclose(TodoFile);
+
+            HeaderUpdate(Path, Header);
 
         } break;
 
@@ -209,6 +230,15 @@ DoCommand(char const *Path, Command *Input, TODOHeader *Header)
 
         case _rm:
         {
+
+            // NOTE: if TODOer is empty
+            if (!(Header->TodoNum + Header->WaitNum))
+            {
+                printf("error: nothing can delete in TODOer\n");
+                exit(-1);
+            }
+
+            // NOTE: if user do not enter the id to delete
             if (!Input->OptionNum)
             {
                 printf("error: need at least one more argument as ID to be removed\n");
@@ -216,77 +246,74 @@ DoCommand(char const *Path, Command *Input, TODOHeader *Header)
                 exit(-1);
             }
 
-            if (!(Header->TodoNum + Header->WaitNum))
+
+            // TODO: Load the TodoObjs from file
+            FILE *TodoFile = fopen(Path, "rb");
+
+            fseek(TodoFile, sizeof(TODOHeader), SEEK_SET);
+
+            Mission *Buf = (Mission *)malloc(Header->TotalNum * sizeof(Mission));
+            int *WantDelete = (int *)malloc(Header->TotalNum * sizeof(int));
+
+            for (int i = 0; i < Header->TotalNum; i++)
+                WantDelete[i] = 0;
+
+            fread(Buf, sizeof(Mission), Header->TotalNum, TodoFile);
+
+            fclose(TodoFile);
+
+            int validIdNum = 0;
+            for (int IdCount = 0;
+                 IdCount < Input->OptionNum;
+                 IdCount++)
             {
-                printf("error: nothing can delete in TODOer\n");
-                exit(-1);
+                // NOTE: change argument to int
+                int IDToDelete = atoi(Input->Option[IdCount]);
+
+                // NOTE: check whether argument is valid or not
+                if (IDToDelete > Header->TotalNum)
+                {
+                    printf("error: %s is invalid.\n", Input->Option[IdCount]);
+                    continue;
+                }
+
+                validIdNum++;
+                WantDelete[IDToDelete - 1] = 1;
             }
 
-            for (int OptionCount = 0;
-                 OptionCount < Input->OptionNum;
-                 OptionCount++)
+            // TODO: delete it/them and recreate a todo file
+            
+            Mission *BufToFile = 
+                (Mission *)malloc((Header->TotalNum - validIdNum) * sizeof(Mission));
+            int MissionToFileCount = 0;
+            for (int MissionCount = 0;
+                 MissionCount < Header->TotalNum;
+                 MissionCount++)
             {
-                // TODO: Load the TodoObjs from file
-                FILE *TodoFile = fopen(Path, "rb");
-
-                fseek(TodoFile, sizeof(TODOHeader), SEEK_SET);
-
-                Mission Buf[Header->TotalNum];
-
-                fread(Buf, sizeof(Mission), Header->TotalNum, TodoFile);
-
-                fclose(TodoFile);
-                
-                // TODO: find the match TodoObj
-                int Found = 0;
-                int FoundMissionOrder;
-                for (int MissionCount = 0;
-                     MissionCount < Header->TodoNum && !Found;
-                     MissionCount++)
+                if (WantDelete[MissionCount])
                 {
-                    if (strcmp(Input->Option[OptionCount], Buf[MissionCount].ID) == 0)
-                    {
-                        Found = 1;
-                        FoundMissionOrder = MissionCount;
-                    }
-
+                    continue;
                 }
 
-                if (!Found)
-                {
-                    printf("error: ID '%s' doesn't exist, need a valid ID\n", 
-                           Input->Option[OptionCount]);
-                }
-                else
-                {
-                    // TODO: delete it and recreate a todo file
-                    
-                    FILE *TodoFile = fopen(Path, "wb");
-
-                    Header->TotalNum--;
-                    Header->TodoNum--;
-                    fwrite(Header , sizeof(TODOHeader), 1, TodoFile);
-                    fwrite(Buf , sizeof(Mission), FoundMissionOrder, TodoFile);
-                    fwrite(Buf + FoundMissionOrder + 1 , sizeof(Mission),
-                           Header->TotalNum - FoundMissionOrder, TodoFile);
-
-                    fclose(TodoFile);
-                }
-
-
+                memcpy(BufToFile + (MissionToFileCount++),
+                       Buf + MissionCount,
+                       sizeof(Mission));
             }
+
+            Header->TotalNum -= validIdNum;
+            // TODO: handle waitnum
+            Header->TodoNum -= validIdNum;
+
+            TodoFile = fopen(Path, "wb");
+            fwrite(Header, sizeof(TODOHeader), 1, TodoFile);
+            fwrite(BufToFile, sizeof(Mission), MissionToFileCount, TodoFile);
+            fclose(TodoFile);
+
+            free(Buf);
 
         } break;
     }
-}
-
-void
-HeaderUpdate(char *Path, TODOHeader *Header)
-{
-    // TODO: Header Update
-    FILE *TodoFile = fopen(Path, "rb+");
-    fwrite(Header , sizeof(TODOHeader), 1, TodoFile);
-    fclose(TodoFile);
+    FreeCommandOption(Input);
 }
 
 int 
@@ -301,10 +328,10 @@ main(int argc, char *argv[])
     }
     else if (argc == 2)
     {
+        // TODO: Show list of Todo if no command
         char *Path = argv[1];
         TODOHeader Header = GetConfig(Path);
         printf("usage: todoer <path-to-todo> <command> [<option>]\n");
-
     }
     else
     {
@@ -313,9 +340,6 @@ main(int argc, char *argv[])
 
         Command Input = GetCommand(argc, argv);
         DoCommand(Path, &Input, &Header);
-        FreeCommandOption(&Input);
-
-        HeaderUpdate(Path, &Header);
 
     }
 

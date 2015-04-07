@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -std=c99 
 BUILDDIR = ../build
 
-src = todoer.c random.c
+src = todoer.c
 target = $(patsubst %.c,$(BUILDDIR)/%,$(src))
 
 all: $(target)
@@ -11,9 +11,6 @@ all: $(target)
 	$(CC) $(CFLAGS) $< -o $@
 
 $(BUILDDIR)/todoer: todoer.c
-	$(CC) $(CFLAGS) $< -o $@
-
-$(BUILDDIR)/random: random.c
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
